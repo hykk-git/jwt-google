@@ -1,0 +1,15 @@
+.env
+.DS_Store
+.vscode/
+**/__pycache__/
+*.py[cod]
+.venv/
+*.log
+*.exe
+*.dll
+*.so
+*.dylib
+*.sqlite3
+data.json
+media
+config/settings.py
