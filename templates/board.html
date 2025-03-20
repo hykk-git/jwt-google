@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>게시판</title>
+</head>
+<body>
+    <h2>게시판</h2>
+    <ul id="post-list"></ul>
+    <button id="logout-btn">로그아웃</button>
+
+    <script>
+        async function fetchPosts() {
+            const response = await fetch("/board/", {
+                method: "GET",
+                headers: { "Content-Type": "application/json" }
+            });
+
+            if (!response.ok) {
+                alert("게시글을 불러오는 중 오류가 발생했습니다.");
+                return;
+            }
+
+            const posts = await response.json();
+            console.log("출력: ", posts)
+            const postList = document.getElementById("post-list");
+
+            if (posts.length === 0) {
+                postList.innerHTML = "<li>게시글이 없습니다.</li>";
+                return;
+            }
+
+            posts.forEach(post => {
+                const li = document.createElement("li");
+                li.textContent = `${post.title} - ${post.author}`;
+                postList.appendChild(li);
+            });
+        }
+
+        fetchPosts();
+
+        document.getElementById("logout-btn").addEventListener("click", function() {
+            alert("로그아웃 되었습니다.");
+            window.location.href = "/";
+        });
+    </script>
+</body>
+</html>

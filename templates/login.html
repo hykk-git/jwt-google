@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>로그인</title>
+</head>
+<body>
+    <h2>로그인</h2>
+    <form id="login-form">
+        <label>아이디:</label>
+        <input type="text" id="username" required>
+        <br>
+        <label>비밀번호:</label>
+        <input type="password" id="password" required>
+        <br>
+        <button type="submit">로그인</button>
+    </form>
+    
+    <script>
+        document.getElementById("login-form").addEventListener("submit", async function(event) {
+            event.preventDefault();
+
+            const username = document.getElementById("username").value;
+            const password = document.getElementById("password").value;
+
+            // Django의 TokenObtainPairView 실행
+            // 사용자의 id pw 받아서 access, refresh token 발급
+            // 리턴값: json, refresh = "", access = ""
+            const response = await fetch("/api/token/", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ username, password })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                alert("로그인 성공!");
+                // 발급받은 토큰을 각각 localStorage에 저장
+                localStorage.setItem("access", data.access);
+                localStorage.setItem("refresh", data.refresh);
+
+                // 로그인 후 main으로 이동
+                window.location.href = "/";
+            } else {
+                alert(data.message || "로그인 실패");
+            }
+        });
+    </script>
+</body>
+</html>
