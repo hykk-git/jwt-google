@@ -1,10 +1,8 @@
 from pathlib import Path
-import os, json
-from django.core.exceptions import ImproperlyConfigured
+import os
 
 from django.shortcuts import redirect, render
 from rest_framework import status
-from json import JSONDecodeError
 from django.http import JsonResponse
 from allauth.socialaccount.models import SocialAccount
 import requests
@@ -22,7 +20,7 @@ def main_view(request):
     return render(request, 'main.html')
 
 # 로그인 페이지 연결
-def google_login_page(request):
+def google_login(request):
    # 로그인에 사용할 정보의 범위 설정(이번에는 email만)
    scope = GOOGLE_USERINFO_SCOPE
 
@@ -41,7 +39,7 @@ def google_callback(request):
     google_access_token = token_request.data.get('access_token')
     google_refresh_token = token_request.data.get('refresh_token')
 
-    # 발급받은 access token으로 사용자 이메일 정보 요청
+    # 발급받은 access token으로 리소스 서버에 사용자 이메일 정보 요청
     email_response = requests.get(f"https://www.googleapis.com/oauth2/v1/tokeninfo?access_token={google_access_token}")
 
     if email_response.status_code != 200:
@@ -53,10 +51,16 @@ def google_callback(request):
         # 기존 유저 이메일과 같은지 확인
         user = User.objects.get(email=email)
         
+        # 만약 계정이 없으면 회원가입 진행
         if user is None:
-            return JsonResponse({"status": 404,"message": "User Account Not Exists"}, status=status.HTTP_404_NOT_FOUND) 
-		
-        # 소셜로그인 계정 유무 확인
+            user = User.objects.create(
+            email=email,
+            username=email.split('@')[0],  # 이메일 앞부분을 username으로 설정
+        )
+        user.set_unusable_password()  # 비밀번호 설정 불가로 처리
+        user.save()
+
+        # 소셜로그인 계정 유무 확인(Google이 맞는지)
         social_user = SocialAccount.objects.get(user=user)
         
         if social_user.provider != "google":
@@ -79,4 +83,4 @@ def google_callback(request):
         return res
         
     except: 
-        return JsonResponse(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return JsonResponse({"status": 400,"message": "Serializer Errors"}, status=status.HTTP_400_BAD_REQUEST)
