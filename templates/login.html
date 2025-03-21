@@ -3,6 +3,68 @@
 <head>
     <meta charset="UTF-8">
     <title>로그인</title>
+    <script>
+        // Refresh Token을 쿠키에 저장하는 함수
+        function setRefreshToken(token) {
+            document.cookie = `refresh=${token}; path=/; secure; SameSite=Strict`;
+        }
+
+        // Access Token을 localStorage에 저장하는 함수
+        function setAccessToken(token) {
+            localStorage.setItem("access", token);
+        }
+
+        // ID Token을 sessionStorage에 저장하는 함수
+        function setIdToken(token) {
+            sessionStorage.setItem("id_token", token);
+        }
+
+        // 토큰 저장 함수
+        function saveTokens(accessToken, refreshToken, idToken) {
+            setAccessToken(accessToken);
+            setRefreshToken(refreshToken);
+            setIdToken(idToken);
+        }
+
+        // 로그인 폼 제출 이벤트 핸들러
+        document.addEventListener("DOMContentLoaded", function() {
+            const loginForm = document.getElementById("login-form");
+
+            loginForm.addEventListener("submit", async function(event) {
+                event.preventDefault();
+
+                const username = document.getElementById("username").value;
+                const password = document.getElementById("password").value;
+
+                try {
+                    const response = await fetch("/api/token/", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({ username, password })
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        alert("로그인 성공!");
+
+                        // 발급받은 토큰을 저장
+                        saveTokens(data.access, data.refresh, data.id_token);
+
+                        // 메인 페이지로 이동
+                        window.location.href = "/";
+                    } else {
+                        alert(data.message || "로그인 실패");
+                    }
+                } catch (error) {
+                    alert("로그인 중 오류가 발생했습니다.");
+                    console.error("로그인 오류:", error);
+                }
+            });
+        });
+    </script>
 </head>
 <body>
     <h2>로그인</h2>
@@ -15,39 +77,5 @@
         <br>
         <button type="submit">로그인</button>
     </form>
-    
-    <script>
-        document.getElementById("login-form").addEventListener("submit", async function(event) {
-            event.preventDefault();
-
-            const username = document.getElementById("username").value;
-            const password = document.getElementById("password").value;
-
-            // Django의 TokenObtainPairView 실행
-            // 사용자의 id pw 받아서 access, refresh token 발급
-            // 리턴값: json, refresh = "", access = ""
-            const response = await fetch("/api/token/", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({ username, password })
-            });
-
-            const data = await response.json();
-
-            if (response.ok) {
-                alert("로그인 성공!");
-                // 발급받은 토큰을 각각 localStorage에 저장
-                localStorage.setItem("access", data.access);
-                localStorage.setItem("refresh", data.refresh);
-
-                // 로그인 후 main으로 이동
-                window.location.href = "/";
-            } else {
-                alert(data.message || "로그인 실패");
-            }
-        });
-    </script>
 </body>
 </html>

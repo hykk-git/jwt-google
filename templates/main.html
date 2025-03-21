@@ -1,145 +1,59 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>메인 페이지</title>
+    <title>Main Page</title>
+    <script>
+        // 토큰 가져오기
+        function getAccessToken() {
+            return localStorage.getItem("access_token");
+        }
+
+        function getIdToken() {
+            return sessionStorage.getItem("id_token");
+        }
+
+        function getRefreshToken() {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; refresh_token=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+        }
+
+        // 로그아웃 처리
+        function logout() {
+            localStorage.removeItem("access_token");
+            sessionStorage.removeItem("id_token");
+            document.cookie = "refresh_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+            alert("로그아웃 되었습니다.");
+            location.reload();
+        }
+
+        // 로그인 상태 확인
+        function checkLoginStatus() {
+            const accessToken = getAccessToken();
+            const refreshToken = getRefreshToken();
+
+            if (accessToken && refreshToken) {
+                document.getElementById("loginBtn").style.display = "none";
+                document.getElementById("logoutBtn").style.display = "block";
+            } else {
+                document.getElementById("loginBtn").style.display = "block";
+                document.getElementById("logoutBtn").style.display = "none";
+            }
+        }
+
+        // 페이지 로딩 시 로그인 상태 확인
+        window.onload = function() {
+            checkLoginStatus();
+        }
+    </script>
 </head>
 <body>
-    <h2>메인 페이지</h2>
-    <div id="auth-buttons">
-        <a href="/signup"><button id="signup-btn">회원가입</button></a>
-        <a href="/login"><button id="login-btn">로그인</button></a>
-        <button id="logout-btn" style="display: none;">로그아웃</button>
-    </div>
-    <button id="board-btn">게시판</button>
+    <h2>Welcome to the Main Page</h2>
 
-    <script>
-        function checkAuthStatus() {
-            const accessToken = localStorage.getItem("access");
-            
-            // accessToken이 있으면 로그인된 사용자라는 것, 로그아웃 버튼 표시
-            if (accessToken) {
-                document.getElementById("signup-btn").style.display = "none";
-                document.getElementById("login-btn").style.display = "none";
-                document.getElementById("logout-btn").style.display = "inline-block";
-            } else {
-                // 없을 경우 로그인이 필요한 사용자, 로그인 버튼 표시
-                document.getElementById("signup-btn").style.display = "inline-block";
-                document.getElementById("login-btn").style.display = "inline-block";
-                document.getElementById("logout-btn").style.display = "none";
-            }
-        }
+    <!-- 로그인 버튼 -->
+    <a href="/google/login/" id="loginBtn" style="display: none;">Google로 로그인</a>
 
-        // 로그아웃 버튼 클릭 시 localStorage에서 토큰 삭제 후 메인 페이지로 이동
-        document.getElementById("logout-btn").addEventListener("click", function() {
-            localStorage.removeItem("access");
-            localStorage.removeItem("refresh");
-            alert("로그아웃 되었습니다.");
-            window.location.href = "/";
-        });
-
-        // 게시판 버튼 클릭 시 fetch로 board.html 직접 로드
-        document.getElementById("board-btn").addEventListener("click", async function() {
-            let accessToken = localStorage.getItem("access");
-
-            if (!accessToken) {
-                alert("로그인이 필요합니다.");
-                window.location.href = "/login";
-                return;
-            }
-
-            // board에 접속할 때 토큰 확인 요청
-            const response = await fetch("/board/", {
-                method: "GET",
-                headers: {
-                    "Authorization": `Bearer ${accessToken}`
-                }
-            });
-
-            if (response.status === 401) {
-                // 401: access 토큰 만료 혹은 refreshToken까지 만료
-                // access 토큰 재발급
-                const newAccessToken = await refreshToken();
-
-                // 새 토큰으로 재요청
-                const retryResponse = await fetch("/board/", {
-                    method: "GET",
-                    headers: {
-                        "Authorization": `Bearer ${newAccessToken}`
-                    }
-                });
-
-                if (retryResponse.ok) {
-                    // access 토큰으로 해결, 페이지 렌더링
-                    loadBoardPage();  
-                } else {
-                    // refreshToken까지 만료
-                    alert("다시 로그인해주세요.");
-                    localStorage.removeItem("access");
-                    localStorage.removeItem("refresh");
-                    window.location.href = "/login.html";
-                }
-            } else if (response.ok) {
-                // 200 OK, access token 유효
-                loadBoardPage();  
-            } else {
-                // 예외처리
-                alert("오류가 발생했습니다.");
-            }
-        });
-
-        // 게시판 페이지를 fetch로 로드하는 함수
-        async function loadBoardPage() {
-            const accessToken = localStorage.getItem("access");
-
-            const response = await fetch("/board/", {
-                method: "GET",
-                headers: {
-                    "Authorization": `Bearer ${accessToken}`
-                }
-            });
-
-            if (response.ok) {
-                // board.html 내용을 그대로 가져옴
-                const boardHtml = await response.text();
-                document.open();
-                document.write(boardHtml);  // 페이지를 교체해서 렌더링
-                document.close();
-            } else {
-                alert("게시판을 불러오는 중 오류가 발생했습니다.");
-                window.location.href = "/login";
-            }
-        }
-
-        // Access 토큰이 만료되었을 경우 Refresh Token 요청해서 갱신
-        async function refreshToken() {
-            const refreshToken = localStorage.getItem("refresh");
-            
-            // Django의 TokenRefreshView 실행
-            // refresh token을 받아서 access token 발급
-            // 리턴값: access = ""
-            const response = await fetch("/api/token/refresh/", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ refresh: refreshToken })
-            });
-
-            if (response.ok) {
-                // refresh token 유효, access token 재발급 완료
-                const data = await response.json();
-                localStorage.setItem("access", data.access); 
-                return data.access;
-            } else {
-                // refresh token 만료
-                alert("다시 로그인하세요.");
-                localStorage.removeItem("access");
-                localStorage.removeItem("refresh");
-                window.location.href = "/login";
-                return null;
-            }
-        }
-
-        checkAuthStatus();
-    </script>
+    <!-- 로그아웃 버튼 -->
+    <button onclick="logout()" id="logoutBtn" style="display: none;">로그아웃</button>
 </body>
 </html>
