@@ -4,3 +4,4 @@ djangorestframework-simplejwt
 django-allauth
 requests
 cryptography
+django-environ

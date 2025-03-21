@@ -1,59 +1,112 @@
 <!DOCTYPE html>
-<html>
+<html lang="ko">
 <head>
-    <title>Main Page</title>
-    <script>
-        // 토큰 가져오기
-        function getAccessToken() {
-            return localStorage.getItem("access_token");
-        }
-
-        function getIdToken() {
-            return sessionStorage.getItem("id_token");
-        }
-
-        function getRefreshToken() {
-            const value = `; ${document.cookie}`;
-            const parts = value.split(`; refresh_token=`);
-            if (parts.length === 2) return parts.pop().split(';').shift();
-        }
-
-        // 로그아웃 처리
-        function logout() {
-            localStorage.removeItem("access_token");
-            sessionStorage.removeItem("id_token");
-            document.cookie = "refresh_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-            alert("로그아웃 되었습니다.");
-            location.reload();
-        }
-
-        // 로그인 상태 확인
-        function checkLoginStatus() {
-            const accessToken = getAccessToken();
-            const refreshToken = getRefreshToken();
-
-            if (accessToken && refreshToken) {
-                document.getElementById("loginBtn").style.display = "none";
-                document.getElementById("logoutBtn").style.display = "block";
-            } else {
-                document.getElementById("loginBtn").style.display = "block";
-                document.getElementById("logoutBtn").style.display = "none";
-            }
-        }
-
-        // 페이지 로딩 시 로그인 상태 확인
-        window.onload = function() {
-            checkLoginStatus();
-        }
-    </script>
+    <meta charset="UTF-8">
+    <title>메인 페이지</title>
 </head>
 <body>
-    <h2>Welcome to the Main Page</h2>
+    <h2>메인 페이지</h2>
 
-    <!-- 로그인 버튼 -->
-    <a href="/google/login/" id="loginBtn" style="display: none;">Google로 로그인</a>
+    <!-- 로그인 여부 확인 -->
+    <div id="auth-section">
+        <!-- 로그인 상태에 따라 버튼 표시 -->
+        <button id="login-btn" onclick="location.href='/google/login/'">Google로 로그인</button>
+        <button id="logout-btn" onclick="logout()">로그아웃</button>
+    </div>
 
-    <!-- 로그아웃 버튼 -->
-    <button onclick="logout()" id="logoutBtn" style="display: none;">로그아웃</button>
+    <!-- 게시판으로 이동 버튼 -->
+    <div>
+        <button onclick="location.href='/board/'">게시판으로 이동</button>
+    </div>
+
+    <script>
+        // URL에서 인가 코드 추출
+        const params = new URLSearchParams(window.location.search);
+
+        // 인가 코드가 있으면 백엔드로 전송
+        const authCode = params.get("code");
+        if (authCode) {
+            fetch("/login/oauth2/google/", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ code: authCode })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.access_token) {
+                    localStorage.setItem("access_token", data.access_token);
+                    alert("로그인 성공!");
+                    // 로그인 완료 후 main으로 이동
+                    window.location.href = "/";
+                } else {
+                    alert("로그인 실패: " + data.message);
+                }
+            })
+            .catch(error => {
+                console.error("Error during login:", error);
+            });
+        }
+
+        async function handleGoogleCallback() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get("code");
+
+        if (code) {
+            const response = await fetch(`/google/callback/?code=${code}`);
+            const data = await response.json();
+
+            if (response.status === 404 && data.message === "User not found") {
+                console.log("여기 왔니?")
+                // 회원가입 여부를 묻는 팝업
+                if (confirm("계정이 없습니다. 구글 계정으로 회원가입하시겠습니까?")) {
+                    // 회원가입 진행
+                    await fetch(`/google/signup/?email=${data.email}&name=${data.name}`);
+                    alert("회원가입이 완료되었습니다.");
+                    window.location.href = "/";
+                } else {
+                    alert("회원가입이 취소되었습니다.");
+                    window.location.href = "/";
+                }
+            } else if (response.ok) {
+                alert("로그인 성공!");
+                localStorage.setItem("access_token", data.token.access_token);
+                window.location.href = "/";
+            } else {
+                alert("로그인 실패: " + data.message);
+                window.location.href = "/";
+            }
+        }
+    }
+
+    
+
+    // 로그아웃 함수
+    function logout() {
+        // localStorage와 쿠키 제거
+        localStorage.removeItem("access_token");
+        document.cookie = "refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+        alert("로그아웃되었습니다.");
+        location.reload();
+    }
+
+    // 로그인 상태 확인
+    window.onload = function() {
+        const accessToken = localStorage.getItem("access_token");
+        const loginBtn = document.getElementById("login-btn");
+        const logoutBtn = document.getElementById("logout-btn");
+
+        if (accessToken) {
+            loginBtn.style.display = "none";
+            logoutBtn.style.display = "block";
+        } else {
+            loginBtn.style.display = "block";
+            logoutBtn.style.display = "none";
+        }
+    }
+    // 로그인 콜백 처리
+    window.onload = handleGoogleCallback;
+    </script>
 </body>
 </html>

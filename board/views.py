@@ -4,18 +4,26 @@ import os
 from django.shortcuts import redirect, render
 from rest_framework import status
 from django.http import JsonResponse
+from django.contrib.auth.decorators import login_required
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
 
 import jwt
 from allauth.socialaccount.models import SocialAccount
 import requests
 
 from .models import *
+from dotenv import load_dotenv
 
+load_dotenv()
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+# Google OAuth 설정
 GOOGLE_USERINFO_SCOPE = os.getenv("GOOGLE_USERINFO_SCOPE")
 GOOGLE_LOGIN_PAGE = os.getenv("GOOGLE_LOGIN_PAGE")
 GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI")
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
-GOOGLE_SECRET = os.getenv("GOOGLE_SECRET")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 
 # 메인 페이지
 def main_view(request):
@@ -34,14 +42,16 @@ def google_callback(request):
     # JS에서 인가 코드 받아옴
     code = request.GET.get("code")
     
-    # 발급받은 Client ID, SECRET, 받은 인가 코드로 token 요청
-    token_request= requests.post(f"https://oauth2.googleapis.com/token?client_id={GOOGLE_CLIENT_ID}&client_secret={GOOGLE_SECRET}&code={code}&grant_type=authorization_code&redirect_uri={GOOGLE_REDIRECT_URI}&access_type=offline")
+    # 발급받은 Client ID, SECRET, 받은 인가 코드로 리소스 서버에 token 요청
+    token_request= requests.post(f"https://oauth2.googleapis.com/token?client_id={GOOGLE_CLIENT_ID}&client_secret={GOOGLE_CLIENT_SECRET}&code={code}&grant_type=authorization_code&redirect_uri={GOOGLE_REDIRECT_URI}&access_type=offline")
 
-    # 토큰 응답은 JSON으로 옴->data.get으로 JSON 파싱
+    # 토큰 응답은 JSON으로 옴->json()으로 JSON 파싱
     token_data = token_request.json()
     google_access_token = token_data.get('access_token')
     google_refresh_token = token_data.get('refresh_token')
     google_id_token = token_data.get('id_token')
+
+    print("access token: ", google_access_token)
 
     # ID 토큰 디코딩
     # 원래 OAuth면 이 자리에 email 정보를 google한테 요청해 봐야 함
@@ -58,8 +68,8 @@ def google_callback(request):
         try:
             user = User.objects.get(email=email)
         except User.DoesNotExist:
-            # 계정이 없으면 회원가입 여부를 묻는 페이지로 리다이렉트
-            return render(request, 'signup.html', {'email': email, 'name': name})
+            # 회원가입 여부를 묻는 알림을 클라이언트로 전달
+            return JsonResponse({"status": 404, "message": "User not found", "email": email, "name": name})
 
         # 소셜로그인 계정 유무 확인(Google)
         try:
@@ -67,8 +77,7 @@ def google_callback(request):
             if social_user.provider != "google":
                 return JsonResponse({"status": 400, "message": "User Account Not Exists"}, status=status.HTTP_400_BAD_REQUEST)
         except SocialAccount.DoesNotExist:
-            # 소셜 계정이 없는 경우에도 가입 여부를 묻는다
-            return render(request, 'signup.html', {'email': email, 'name': name})
+            return JsonResponse({"status": 404, "message": "Social account not found", "email": email, "name": name})
 
         # 로그인 성공 응답
         response = JsonResponse(
@@ -129,15 +138,7 @@ def refresh_access_token(request):
         return JsonResponse({"status": 401, "message": "Refresh token not found"}, status=401)
 
     # 구글 OAuth 서버에 액세스 토큰 갱신 요청
-    token_request = requests.post(
-        GOOGLE_REDIRECT_URI,
-        data={
-            "client_id": GOOGLE_CLIENT_ID,
-            "client_secret": GOOGLE_SECRET,
-            "refresh_token": refresh_token,
-            "grant_type": "refresh_token",
-        }
-    )
+    token_request = token_request= requests.post(f"https://oauth2.googleapis.com/token?client_id={GOOGLE_CLIENT_ID}&client_secret={GOOGLE_CLIENT_SECRET}&grant_type=refresh_token&redirect_uri={GOOGLE_REDIRECT_URI}")
 
     # 토큰 응답 파싱
     token_data = token_request.json()
@@ -154,3 +155,8 @@ def refresh_access_token(request):
         "expires_in": token_data.get("expires_in"),
         "token_type": token_data.get("token_type"),
     }, status=200)
+
+@permission_classes((IsAuthenticated, ))
+def board_view(request):
+    posts = Post.objects.all()
+    return render(request, 'board.html', {'posts': posts})
