@@ -7,8 +7,10 @@ from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
+from django.views.decorators.csrf import csrf_exempt
 
 import jwt
+import json
 from allauth.socialaccount.models import SocialAccount
 import requests
 
@@ -35,7 +37,7 @@ def google_login(request):
    scope = GOOGLE_USERINFO_SCOPE
 
    # Google 로그인 페이지를 띄워 주는 역할
-   return redirect(f"{GOOGLE_LOGIN_PAGE}?client_id={GOOGLE_CLIENT_ID}&response_type=code&redirect_uri={GOOGLE_REDIRECT_URI}&scope={scope}")
+   return redirect(f"{GOOGLE_LOGIN_PAGE}?client_id={GOOGLE_CLIENT_ID}&response_type=code&redirect_uri={GOOGLE_REDIRECT_URI}&scope={scope}&access_type=offline")
 
 # 인가 코드를 받아 로그인 처리
 def google_callback(request):
@@ -43,7 +45,7 @@ def google_callback(request):
     code = request.GET.get("code")
     
     # 발급받은 Client ID, SECRET, 받은 인가 코드로 리소스 서버에 token 요청
-    token_request= requests.post(f"https://oauth2.googleapis.com/token?client_id={GOOGLE_CLIENT_ID}&client_secret={GOOGLE_CLIENT_SECRET}&code={code}&grant_type=authorization_code&redirect_uri={GOOGLE_REDIRECT_URI}&access_type=offline")
+    token_request= requests.post(f"https://oauth2.googleapis.com/token?client_id={GOOGLE_CLIENT_ID}&client_secret={GOOGLE_CLIENT_SECRET}&code={code}&grant_type=authorization_code&redirect_uri={GOOGLE_REDIRECT_URI}")
 
     # 토큰 응답은 JSON으로 옴->json()으로 JSON 파싱
     token_data = token_request.json()
@@ -51,17 +53,14 @@ def google_callback(request):
     google_refresh_token = token_data.get('refresh_token')
     google_id_token = token_data.get('id_token')
 
-    print("access token: ", google_access_token)
+    print("refresh token: ", google_refresh_token)
 
-    # ID 토큰 디코딩
+    # ID 토큰 검증(디코딩)
     # 원래 OAuth면 이 자리에 email 정보를 google한테 요청해 봐야 함
-    try:
-        decoded_token = jwt.decode(google_id_token, options={"verify_signature": False})
-        email = decoded_token.get('email')
-        name = decoded_token.get('name')
-
-    except Exception as e:
-        return JsonResponse({"status": 400, "message": f"Token Decode Error: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    decoded_token = jwt.decode(google_id_token, options={"verify_signature": False})
+    email = decoded_token.get('email')
+    name = decoded_token.get('name')
 
     try:
         # 기존 유저 이메일 확인
@@ -69,7 +68,8 @@ def google_callback(request):
             user = User.objects.get(email=email)
         except User.DoesNotExist:
             # 회원가입 여부를 묻는 알림을 클라이언트로 전달
-            return JsonResponse({"status": 404, "message": "User not found", "email": email, "name": name})
+            return render(request, 'signup_prompt.html', {'email': email})
+            # return JsonResponse({"status": 404, "message": "User not found", "email": email, "name": name})
 
         # 소셜로그인 계정 유무 확인(Google)
         try:
@@ -110,25 +110,28 @@ def google_callback(request):
         return JsonResponse({"status": 400, "message": f"Serializer Errors: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
 
 # 회원가입 여부를 묻는 페이지
+@csrf_exempt
 def google_signup(request):
-    email = request.GET.get("email")
-    name = request.GET.get("name")
-
     if request.method == "POST":
         try:
+            data = json.loads(request.body)
+            email = data.get("email")
+            name = data.get("name")
+
+            if not email or not name:
+                return JsonResponse({"status": 400, "message": "Invalid data"}, status=status.HTTP_400_BAD_REQUEST)
+
             user = User.objects.create(email=email, username=name)
             user.set_unusable_password()
             user.save()
 
             # 소셜 계정 추가
             SocialAccount.objects.create(user=user, provider="google", uid=email)
-            return redirect('main')
-
+            return JsonResponse({"status": 200, "message": "Signup success"})
         except Exception as e:
             return JsonResponse({"status": 400, "message": f"Signup Failed: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
-    
-    # 가입 거부 시 홈으로 리다이렉트
-    return redirect('main')
+
+    return JsonResponse({"status": 405, "message": "Method not allowed"}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
 # refresh token으로 새로운 access token을 발급받는 함수
 def refresh_access_token(request):

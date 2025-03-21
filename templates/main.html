@@ -58,7 +58,6 @@
             const data = await response.json();
 
             if (response.status === 404 && data.message === "User not found") {
-                console.log("여기 왔니?")
                 // 회원가입 여부를 묻는 팝업
                 if (confirm("계정이 없습니다. 구글 계정으로 회원가입하시겠습니까?")) {
                     // 회원가입 진행
