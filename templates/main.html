@@ -21,7 +21,10 @@
     </div>
 
     <script>
-    // URL에서 인가 코드 추출
+        // access token 저장할 로컬 변수 선언 
+        let accessToken = null;
+
+        // URL에서 인가 코드 추출
         const params = new URLSearchParams(window.location.search);
         const code = params.get("code");
         const error = urlParams.get('error');
@@ -45,6 +48,7 @@
             })
             .then(data => {
                 console.log('Success:', data);
+                accessToken = data.access_token
                 // 응답이 200인 경우 처리
                 if (data.message === 'login successful' || data.message === 'Signup success') {
                     window.location.href = `http://127.0.0.1:8000/main.html`;
@@ -87,6 +91,5 @@
         }
     }
 </script>
-
 </body>
 </html>
