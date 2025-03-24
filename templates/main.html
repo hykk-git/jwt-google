@@ -23,10 +23,10 @@
     <script>
     // URL에서 인가 코드 추출
         const params = new URLSearchParams(window.location.search);
-        const Authcode = params.get("code");
+        const code = params.get("code");
         const error = urlParams.get('error');
 
-        console.log("code: ", Authcode)
+        console.log("code: ", code)
 
         if (code) {
             // 성공적으로 code를 추출한 경우, 서버로 전송
@@ -35,7 +35,7 @@
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ code: Authcode })
+                body: JSON.stringify({ code: code })
             })
             .then(response => {
                 if (!response.ok) {
@@ -46,7 +46,7 @@
             .then(data => {
                 console.log('Success:', data);
                 // 응답이 200인 경우 처리
-                if (data.message === 'login successful' || data.message === 'register successful') {
+                if (data.message === 'login successful' || data.message === 'Signup success') {
                     window.location.href = `http://127.0.0.1:8000/main.html`;
                 } else {
                     // 실패 시 오류 처리
@@ -84,14 +84,6 @@
         } else {
             loginBtn.style.display = "block";
             logoutBtn.style.display = "none";
-        }
-    }
-
-    // 페이지 로드 시 실행
-    window.onload = function() {
-        checkLoginStatus();
-        if (authCode) {
-            handleGoogleLogin(authCode);
         }
     }
 </script>

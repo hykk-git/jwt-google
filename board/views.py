@@ -12,9 +12,10 @@ from django.shortcuts import redirect, render
 from rest_framework import status
 from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from django.views.decorators.csrf import csrf_exempt
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from allauth.socialaccount.models import SocialAccount
 
 from .models import *
@@ -81,35 +82,57 @@ def google_callback(request):
     )
 
     email = verified_token.get('email')
+    name = verified_token.get('name')
 
-    try:
-        # 기존 유저 이메일 확인
-        try:
-            user = User.objects.filter(email=email).first()
-        except User.DoesNotExist:
-            # 회원가입 여부를 묻는 알림을 클라이언트로 전달
-            return JsonResponse({"status": 404, "message": "User not found", "email": email})
+    user = User.objects.filter(email=email).first()
 
-        # 소셜로그인 계정 유무 확인(Google)
+    # 기존에 일반 회원가입했던 유저인 경우 → 소셜 계정 추가
+    if user:
         try:
-            social_user = SocialAccount.objects.get(user=user)
-            if social_user.provider != "google":
-                return JsonResponse({"status": 400, "message": "User Account Not Exists"}, status=status.HTTP_400_BAD_REQUEST)
+            social_user = SocialAccount.objects.get(user=user, provider="google")
+            print("Google 소셜 유저 확인: ", social_user)
+            # 이미 Google로 가입한 유저면 바로 로그인 성공 처리
+            response = JsonResponse({"status": 200, "message": "Login successful"})
+            response.set_cookie(
+                key="access_token",
+                value=google_access_token,
+                httponly=True,
+                secure=True,
+                samesite="Strict"
+            )
+            response.set_cookie(
+                key="refresh_token",
+                value=google_refresh_token,
+                httponly=True,
+                secure=True,
+                samesite="Strict"
+            )
+            return response
         except SocialAccount.DoesNotExist:
+            # 기존에 일반 회원가입 유저인 경우 소셜 계정을 추가함
+            print("기존 회원가입 유저 - 소셜 계정 추가")
             SocialAccount.objects.create(user=user, provider="google", uid=email)
-            return JsonResponse({"status": 200, "message": "Signup success"}, redirect('/'))
-        # 로그인 성공 응답
-        response = JsonResponse({"message": "login success",}, status=status.HTTP_200_OK,)
+            return JsonResponse({"status": 200, "message": "Social account added"}, status=200)
 
-        # Refresh Token을 HttpOnly 쿠키로 설정
-        response.set_cookie(
-            key="refresh_token",
-            value=google_refresh_token,
-            httponly=True,
-            secure=True,
-            samesite="Strict"
-        )
+    # 기존에 회원가입하지 않은 유저 → 가입 여부 묻기
+    else:
+        print("회원가입 필요 - 이름 정보 부족 시 재요청")
+        # 이름 정보가 없는 경우 프로필 범위를 추가하여 다시 요청
+        if not name:
+            print("이름 정보 없음 - 프로필 범위로 재요청")
+            return redirect(
+                f"{GOOGLE_LOGIN_PAGE}?client_id={GOOGLE_CLIENT_ID}&response_type=code&redirect_uri={GOOGLE_REDIRECT_URI}&scope=openid%20email%20profile&access_type=offline&prompt=consent"
+            )
 
+        # 이름 정보가 있으면 profile 받아온 것-> 회원가입 진행
+        user = User.objects.create(email=email, username=name)
+        user.set_unusable_password()
+        user.save()
+
+        # 소셜 계정 추가
+        SocialAccount.objects.create(user=user, provider="google", uid=email)
+
+        response = JsonResponse({"status": 200, "message": "Signup successful"})
         response.set_cookie(
             key="access_token",
             value=google_access_token,
@@ -117,11 +140,14 @@ def google_callback(request):
             secure=True,
             samesite="Strict"
         )
-        
+        response.set_cookie(
+            key="refresh_token",
+            value=google_refresh_token,
+            httponly=True,
+            secure=True,
+            samesite="Strict"
+        )
         return response
-
-    except Exception as e:
-        return JsonResponse({"status": 400, "message": f"Serializer Errors: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
 
 # 구글로 회원가입하기 위한 함수
 def google_signup(request):
@@ -173,6 +199,7 @@ def refresh_access_token(request):
         "token_type": token_data.get("token_type"),
     }, status=200)
 
+@authentication_classes((JWTAuthentication, ))
 @permission_classes((IsAuthenticated, ))
 def board_view(request):
     posts = Post.objects.all()
