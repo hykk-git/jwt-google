@@ -6,9 +6,6 @@ class User(AbstractUser):
     email = models.EmailField(unique=True, primary_key=True)
     name = models.CharField(max_length=50)
 
-    USERNAME_FIELD = 'email'  # 기본 로그인 필드 설정
-    REQUIRED_FIELDS = ['name']  # 필수 필드
-    
     def __str__(self):
         return self.name
 

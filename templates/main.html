@@ -21,75 +21,47 @@
     </div>
 
     <script>
-        // access token 저장할 로컬 변수 선언 
-        let accessToken = null;
+        // 쿠키에서 특정 키의 값을 가져오는 함수
+        function getCookie(name) {
+            const value = `; ${document.cookie}`;  // 쿠키 문자열 앞에 세미콜론 추가
+            const parts = value.split(`; ${name}=`);  // 원하는 쿠키 이름으로 분리
+
+            if (parts.length === 2) {
+                return parts.pop().split(';').shift();  // 값만 반환
+            }
+            return null;
+        }
 
         // URL에서 인가 코드 추출
         const params = new URLSearchParams(window.location.search);
         const code = params.get("code");
-        const error = urlParams.get('error');
-
-        console.log("code: ", code)
 
         if (code) {
-            // 성공적으로 code를 추출한 경우, 서버로 전송
-            fetch('http://127.0.0.1:8000/login/oauth2/google/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ code: code })
-            })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
-                return response.json();
-            })
-            .then(data => {
-                console.log('Success:', data);
-                accessToken = data.access_token
-                // 응답이 200인 경우 처리
-                if (data.message === 'login successful' || data.message === 'Signup success') {
-                    window.location.href = `http://127.0.0.1:8000/main.html`;
-                } else {
-                    // 실패 시 오류 처리
-                    throw new Error('Unexpected response message');
-                }
-            })
-            .catch((error) => {
-                console.error('Error:', error);
-                // 실패 시에도 main.html로 이동
-                window.location.href = `http://127.0.0.1:8000/main.html`;
-            });
-        } else {
-            // code와 error가 모두 없는 경우, 기본 리디렉션
-            console.error('No code or error found in URL');
-            window.location.href = 'http://127.0.0.1:8000/main.html';
-        }
-
-    // 로그아웃 함수
-    function logout() {
-        localStorage.removeItem("access_token");
-        document.cookie = "refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-        alert("로그아웃되었습니다.");
-        location.reload();
-    }
-
-    // 로그인 상태 확인
-    function checkLoginStatus() {
-        const accessToken = localStorage.getItem("access_token");
-        const loginBtn = document.getElementById("login-btn");
-        const logoutBtn = document.getElementById("logout-btn");
-
+                fetch(`/login/oauth2/google/?code=${code}`)
+                    .catch(error => {
+                        console.error("Login Error:", error);
+                    });
+            }
+        
+        const accessToken = getCookie("access_token");
+        // accessToken이 있으면 로그인된 사용자라는 것, 로그아웃 버튼 표시
         if (accessToken) {
-            loginBtn.style.display = "none";
-            logoutBtn.style.display = "block";
+            document.getElementById("signup-btn").style.display = "none";
+            document.getElementById("login-btn").style.display = "none";
+            document.getElementById("logout-btn").style.display = "inline-block";
         } else {
-            loginBtn.style.display = "block";
-            logoutBtn.style.display = "none";
+            // 없을 경우 로그인이 필요한 사용자, 로그인 버튼 표시
+            document.getElementById("signup-btn").style.display = "inline-block";
+            document.getElementById("login-btn").style.display = "inline-block";
+            document.getElementById("logout-btn").style.display = "none";
         }
-    }
+
+        // 로그아웃 함수
+        function logout() {
+            alert("로그아웃되었습니다.");
+            location.reload();
+        }
+
 </script>
 </body>
 </html>
