@@ -8,10 +8,13 @@ from google.oauth2 import id_token
 from google.auth.transport.requests import Request
 
 from django.shortcuts import redirect, render
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponseRedirect
+from django.contrib.auth import authenticate, login, logout
+
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.authentication import JWTAuthentication
+
 from allauth.socialaccount.models import SocialAccount
 
 from .models import *
@@ -46,6 +49,19 @@ def signup_view(request):
     else:
         form = SignupForm()
     return render(request, 'signup.html', {'form': form})
+
+# 일반 회원가입 사용자 로그인
+def login_view(request):
+    if request.method == 'POST':
+        username = request.POST['username']
+        password = request.POST['password']
+        user = authenticate(request, username=username, password=password)
+        if user:
+            login(request, user)
+            return redirect('/')
+        else:
+            return render(request, 'login.html', {'error': 'Invalid credentials'})
+    return render(request, 'login.html')
 
 # 로그인 페이지 연결
 def google_login(request):
@@ -92,19 +108,21 @@ def google_callback(request):
             # 이미 Google로 가입한 유저면 바로 로그인 성공 처리
             response = JsonResponse({"status": 200, "message": "Login successful"})
 
+            response = HttpResponseRedirect("/")
+            
             response.set_cookie(
                 key="access_token",
                 value=google_access_token,
-                httponly=False,
-                secure=False,
+                httponly=True,
+                secure=True,
                 samesite="Lax"
             )
 
             response.set_cookie(
                 key="refresh_token",
                 value=google_refresh_token,
-                httponly=False,
-                secure=False,
+                httponly=True,
+                secure=True,
                 samesite="Lax"
             )
             return response

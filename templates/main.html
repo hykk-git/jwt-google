@@ -13,7 +13,8 @@
     <div id="auth-button">
         <!-- 로그인 상태에 따라 버튼 표시 -->
         <a href="/signup"><button id="signup-btn">회원가입</button></a>
-        <a href="/google/login"><button id="login-btn">Google로 로그인</button></a>
+        <a href="/login"><button id="login-btn">로그인</button></a>
+        <a href="/google/login"><button id="googe-login-btn">Google로 로그인</button></a>
         <button id="logout-btn" onclick="logout()">로그아웃</button>
     </div>
 
@@ -38,12 +39,14 @@
         // accessToken이 있으면 로그인된 사용자라는 것, 로그아웃 버튼 표시
         if (accessToken) {
             document.getElementById("signup-btn").style.display = "none";
+            document.getElementById("googe-login-btn").style.display = "none";
             document.getElementById("login-btn").style.display = "none";
             document.getElementById("logout-btn").style.display = "inline-block";
         } else {
             // 없을 경우 로그인이 필요한 사용자, 로그인 버튼 표시
             document.getElementById("signup-btn").style.display = "inline-block";
             document.getElementById("login-btn").style.display = "inline-block";
+            document.getElementById("googe-login-btn").style.display = "inline-block";
             document.getElementById("logout-btn").style.display = "none";
         }
 
