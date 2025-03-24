@@ -22,7 +22,6 @@
             }
 
             const posts = await response.json();
-            console.log("출력: ", posts)
             const postList = document.getElementById("post-list");
 
             if (posts.length === 0) {

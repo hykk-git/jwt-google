@@ -15,6 +15,7 @@ from allauth.socialaccount.models import SocialAccount
 import requests
 
 from .models import *
+from .forms import SignupForm
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -31,19 +32,32 @@ GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 def main_view(request):
     return render(request, 'main.html')
 
+def signup_view(request):
+    if request.method == 'POST':
+        form = SignupForm(request.POST)
+        if form.is_valid():
+            user = form.save(commit=False)
+
+            # 비밀번호 해시해서 저장
+            user.set_password(form.cleaned_data['password']) 
+            user.save()
+            return redirect('/')
+    else:
+        form = SignupForm()
+    return render(request, 'signup.html', {'form': form})
+
 # 로그인 페이지 연결
 def google_login(request):
    # 로그인에 사용할 정보의 범위 설정(이번에는 email만)
    scope = GOOGLE_USERINFO_SCOPE
 
    # Google 로그인 페이지를 띄워 주는 역할
-   return redirect(f"{GOOGLE_LOGIN_PAGE}?client_id={GOOGLE_CLIENT_ID}&response_type=code&redirect_uri={GOOGLE_REDIRECT_URI}&scope={scope}&access_type=offline")
+   return redirect(f"{GOOGLE_LOGIN_PAGE}?client_id={GOOGLE_CLIENT_ID}&response_type=code&redirect_uri={GOOGLE_REDIRECT_URI}&scope={scope}&access_type=offline&prompt=consent")
 
 # 인가 코드를 받아 로그인 처리
 def google_callback(request):
-    # JS에서 인가 코드 받아옴
-    code = request.GET.get("code")
-    
+    # 프론트에서 인가 코드 받아옴
+    code = request.GET.get("code")  
     # 발급받은 Client ID, SECRET, 받은 인가 코드로 리소스 서버에 token 요청
     token_request= requests.post(f"https://oauth2.googleapis.com/token?client_id={GOOGLE_CLIENT_ID}&client_secret={GOOGLE_CLIENT_SECRET}&code={code}&grant_type=authorization_code&redirect_uri={GOOGLE_REDIRECT_URI}")
 
@@ -53,23 +67,20 @@ def google_callback(request):
     google_refresh_token = token_data.get('refresh_token')
     google_id_token = token_data.get('id_token')
 
-    print("refresh token: ", google_refresh_token)
-
     # ID 토큰 검증(디코딩)
     # 원래 OAuth면 이 자리에 email 정보를 google한테 요청해 봐야 함
     
     decoded_token = jwt.decode(google_id_token, options={"verify_signature": False})
+    print("token: ", decoded_token)
     email = decoded_token.get('email')
-    name = decoded_token.get('name')
 
     try:
         # 기존 유저 이메일 확인
         try:
-            user = User.objects.get(email=email)
+            user = User.objects.filter(email=email).first()
         except User.DoesNotExist:
             # 회원가입 여부를 묻는 알림을 클라이언트로 전달
-            return render(request, 'signup_prompt.html', {'email': email})
-            # return JsonResponse({"status": 404, "message": "User not found", "email": email, "name": name})
+            return JsonResponse({"status": 404, "message": "User not found", "email": email})
 
         # 소셜로그인 계정 유무 확인(Google)
         try:
@@ -77,8 +88,8 @@ def google_callback(request):
             if social_user.provider != "google":
                 return JsonResponse({"status": 400, "message": "User Account Not Exists"}, status=status.HTTP_400_BAD_REQUEST)
         except SocialAccount.DoesNotExist:
-            return JsonResponse({"status": 404, "message": "Social account not found", "email": email, "name": name})
-
+            SocialAccount.objects.create(user=user, provider="google", uid=email)
+            return JsonResponse({"status": 200, "message": "Signup success"}, redirect('/'))
         # 로그인 성공 응답
         response = JsonResponse(
             {
@@ -116,12 +127,11 @@ def google_signup(request):
         try:
             data = json.loads(request.body)
             email = data.get("email")
-            name = data.get("name")
 
-            if not email or not name:
+            if not email:
                 return JsonResponse({"status": 400, "message": "Invalid data"}, status=status.HTTP_400_BAD_REQUEST)
 
-            user = User.objects.create(email=email, username=name)
+            user = User.objects.create(email=email)
             user.set_unusable_password()
             user.save()
 
@@ -141,7 +151,7 @@ def refresh_access_token(request):
         return JsonResponse({"status": 401, "message": "Refresh token not found"}, status=401)
 
     # 구글 OAuth 서버에 액세스 토큰 갱신 요청
-    token_request = token_request= requests.post(f"https://oauth2.googleapis.com/token?client_id={GOOGLE_CLIENT_ID}&client_secret={GOOGLE_CLIENT_SECRET}&grant_type=refresh_token&redirect_uri={GOOGLE_REDIRECT_URI}")
+    token_request = requests.post(f"https://oauth2.googleapis.com/token?client_id={GOOGLE_CLIENT_ID}&client_secret={GOOGLE_CLIENT_SECRET}&grant_type=refresh_token&redirect_uri={GOOGLE_REDIRECT_URI}")
 
     # 토큰 응답 파싱
     token_data = token_request.json()
