@@ -150,10 +150,13 @@ def google_callback(request):
         return response
 
 @api_view(['GET'])
-@permission_classes((IsAuthenticated, ))
 def board_view(request):
-    if request.user:
+    # 쿠키에서 access token 받아옴
+    access_token = request.COOKIES.get("access_token")
+    
+    # access token 존재시 접근 허용
+    if access_token:
         posts = Post.objects.all()
         return render(request, 'board.html', {'posts': posts})
     else:
-        return JsonResponse({"status": 400, "message": "로그인이 필요합니다."})
+        return JsonResponse({"message": "로그인이 필요합니다."}, status=401)

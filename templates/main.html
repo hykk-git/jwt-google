@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <title>메인 페이지</title>
+    <script src="https://cdn.jsdelivr.net/npm/js-cookie@3.0.1/dist/js.cookie.min.js"></script>
+
 </head>
 <body>
     <h2>메인 페이지</h2>
@@ -21,17 +23,6 @@
     </div>
 
     <script>
-        // 쿠키에서 특정 키의 값을 가져오는 함수
-        function getCookie(name) {
-            const value = `; ${document.cookie}`;  // 쿠키 문자열 앞에 세미콜론 추가
-            const parts = value.split(`; ${name}=`);  // 원하는 쿠키 이름으로 분리
-
-            if (parts.length === 2) {
-                return parts.pop().split(';').shift();  // 값만 반환
-            }
-            return null;
-        }
-
         // URL에서 인가 코드 추출
         const params = new URLSearchParams(window.location.search);
         const code = params.get("code");
@@ -43,7 +34,7 @@
                     });
             }
         
-        const accessToken = getCookie("access_token");
+        const accessToken = Cookies.get('access_token');
         // accessToken이 있으면 로그인된 사용자라는 것, 로그아웃 버튼 표시
         if (accessToken) {
             document.getElementById("signup-btn").style.display = "none";
@@ -56,8 +47,10 @@
             document.getElementById("logout-btn").style.display = "none";
         }
 
-        // 로그아웃 함수
+        // 로그아웃시 저장된 쿠키 삭제
         function logout() {
+            Cookies.remove('access_token');
+            Cookies.remove('refresh_token');
             alert("로그아웃되었습니다.");
             location.reload();
         }
