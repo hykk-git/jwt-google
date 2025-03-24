@@ -150,7 +150,6 @@ def google_callback(request):
         return response
 
 @api_view(['GET'])
-# @authentication_classes((JWTAuthentication, ))
 @permission_classes((IsAuthenticated, ))
 def board_view(request):
     if request.user:
