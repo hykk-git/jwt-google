@@ -104,12 +104,11 @@ def google_callback(request):
     if user:
         try:
             social_user = SocialAccount.objects.get(user=user, provider="google")
-            print("유저 확인: ", social_user)
-            # 이미 Google로 가입한 유저면 바로 로그인 성공 처리
-            response = JsonResponse({"status": 200, "message": "Login successful"})
 
+            # 이미 Google로 가입한 유저면 바로 로그인 성공 처리 후 main 이동
             response = HttpResponseRedirect("/")
             
+            # httponly, secure = True로 access token 쿠키에 저장
             response.set_cookie(
                 key="access_token",
                 value=google_access_token,
@@ -118,6 +117,7 @@ def google_callback(request):
                 samesite="Lax"
             )
 
+            # httponly, secure = True로 refresh token 쿠키에 저장
             response.set_cookie(
                 key="refresh_token",
                 value=google_refresh_token,

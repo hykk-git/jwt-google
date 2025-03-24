@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>메인 페이지</title>
+    <!-- 쿠키 값에 쉽게 접근하게 해주는 라이브러리(js.cookie) -->
     <script src="https://cdn.jsdelivr.net/npm/js-cookie@3.0.1/dist/js.cookie.min.js"></script>
 
 </head>
@@ -28,6 +29,7 @@
         const params = new URLSearchParams(window.location.search);
         const code = params.get("code");
 
+        // 미리 설정한 /login/oauth2/google URI로 쿼리 붙여서 fetch
         if (code) {
                 fetch(`/login/oauth2/google/?code=${code}`)
                     .catch(error => {
