@@ -3,5 +3,6 @@ djangorestframework
 djangorestframework-simplejwt
 django-allauth
 requests
+google-auth
 cryptography
 django-environ

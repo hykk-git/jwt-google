@@ -1,5 +1,12 @@
 from pathlib import Path
+
 import os
+import jwt
+import json
+import requests
+
+from google.oauth2 import id_token
+from google.auth.transport.requests import Request
 
 from django.shortcuts import redirect, render
 from rest_framework import status
@@ -8,11 +15,7 @@ from django.contrib.auth.decorators import login_required
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from django.views.decorators.csrf import csrf_exempt
-
-import jwt
-import json
 from allauth.socialaccount.models import SocialAccount
-import requests
 
 from .models import *
 from .forms import SignupForm
@@ -67,12 +70,17 @@ def google_callback(request):
     google_refresh_token = token_data.get('refresh_token')
     google_id_token = token_data.get('id_token')
 
-    # ID 토큰 검증(디코딩)
+    # ID 토큰 유효성 검증
     # 원래 OAuth면 이 자리에 email 정보를 google한테 요청해 봐야 함
-    
-    decoded_token = jwt.decode(google_id_token, options={"verify_signature": False})
-    print("token: ", decoded_token)
-    email = decoded_token.get('email')
+    # input: id token, client_id
+    # output: 디코딩돼서 검증된 id token
+    verified_token = id_token.verify_oauth2_token(
+    google_id_token,
+    Request(),
+    GOOGLE_CLIENT_ID,
+    )
+
+    email = verified_token.get('email')
 
     try:
         # 기존 유저 이메일 확인
@@ -91,25 +99,20 @@ def google_callback(request):
             SocialAccount.objects.create(user=user, provider="google", uid=email)
             return JsonResponse({"status": 200, "message": "Signup success"}, redirect('/'))
         # 로그인 성공 응답
-        response = JsonResponse(
-            {
-                "user": {
-                    "id": user.id,
-                    "email": user.email,
-                },
-                "message": "login success",
-                "token": {
-                    "access_token": google_access_token,
-                    "id_token": google_id_token,
-                },
-            },
-            status=status.HTTP_200_OK,
-        )
+        response = JsonResponse({"message": "login success",}, status=status.HTTP_200_OK,)
 
         # Refresh Token을 HttpOnly 쿠키로 설정
         response.set_cookie(
             key="refresh_token",
             value=google_refresh_token,
+            httponly=True,
+            secure=True,
+            samesite="Strict"
+        )
+
+        response.set_cookie(
+            key="access_token",
+            value=google_access_token,
             httponly=True,
             secure=True,
             samesite="Strict"
@@ -120,9 +123,10 @@ def google_callback(request):
     except Exception as e:
         return JsonResponse({"status": 400, "message": f"Serializer Errors: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
 
-# 회원가입 여부를 묻는 페이지
-@csrf_exempt
+# 구글로 회원가입하기 위한 함수
 def google_signup(request):
+    token_request= requests.post(f"https://oauth2.googleapis.com/token?client_id={GOOGLE_CLIENT_ID}&client_secret={GOOGLE_CLIENT_SECRET}&code={code}&grant_type=authorization_code&redirect_uri={GOOGLE_REDIRECT_URI}&scope=openid%20profile%20email")
+
     if request.method == "POST":
         try:
             data = json.loads(request.body)
