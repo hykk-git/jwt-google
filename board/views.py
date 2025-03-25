@@ -53,19 +53,6 @@ def signup_view(request):
         form = SignupForm()
     return render(request, 'signup.html', {'form': form})
 
-# 일반 회원가입 사용자 로그인
-def login_view(request):
-    if request.method == 'POST':
-        username = request.POST['username']
-        password = request.POST['password']
-        user = authenticate(request, username=username, password=password)
-        if user:
-            login(request, user)
-            return redirect('/')
-        else:
-            return render(request, 'login.html', {'error': '형식 오류'})
-    return render(request, 'login.html')
-
 # httponly, secure = True로 token을 쿠키에 저장하는 함수
 def set_cookies(response, access_token, refresh_token):
     response.set_cookie(
@@ -83,6 +70,10 @@ def set_cookies(response, access_token, refresh_token):
         samesite="None"
     )
     return response
+
+# 일반 회원가입 사용자 로그인
+def login_view(request):
+    return render(request, 'login.html')
 
 # 구글 로그인 페이지 연결
 def google_login(request):
