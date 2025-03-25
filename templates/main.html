@@ -3,9 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <title>메인 페이지</title>
-    <!-- 쿠키 값에 쉽게 접근하게 해주는 라이브러리(js.cookie) -->
-    <script src="https://cdn.jsdelivr.net/npm/js-cookie@3.0.1/dist/js.cookie.min.js"></script>
-
 </head>
 <body>
     <h2>메인 페이지</h2>
@@ -88,6 +85,19 @@
             });
         }
 
+        async function refreshToken() {
+            try {
+                const response = await fetch('/refresh-token/', {
+                    method: 'GET',
+                    credentials: 'include'  // 쿠키 포함해서 전송
+                });
+                const data = await response.json();
+            } catch (error) {
+                console.error("갱신 요청 중 오류 발생:", error);
+            }
+        }
+        // 1시간마다 토큰 갱신
+        setInterval(refreshToken, 3600 * 1000);
 </script>
 </body>
 </html>

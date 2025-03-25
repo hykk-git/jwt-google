@@ -9,7 +9,6 @@ from google.auth.transport.requests import Request
 
 from django.shortcuts import redirect, render
 from django.http import JsonResponse, HttpResponseRedirect
-from django.contrib.auth import authenticate, login
 
 from rest_framework.decorators import api_view
 
@@ -96,8 +95,6 @@ def google_callback(request):
     google_refresh_token = token_data.get('refresh_token')
     google_id_token = token_data.get('id_token')
 
-    # print("refresh token: ", google_refresh_token)
-
     # ID 토큰 유효성 검증
     # input: id token, client_id
     # output: 디코딩돼서 검증된 id token
@@ -149,7 +146,7 @@ def login_status(request):
         return JsonResponse({"login": True, "message": "로그인 상태"})
     else:
         return JsonResponse({"login": False, "message": "로그아웃 상태"})
-    
+
 # 요청을 받고 브라우저 쿠키를 비활성화시키는 로그아웃 함수
 @api_view(['POST'])
 def logout_view(request):
@@ -158,6 +155,39 @@ def logout_view(request):
     # 쿠키 삭제 (쿠키 유효기간 과거로 설정)
     response.delete_cookie('access_token')
     response.delete_cookie('refresh_token')
+    return response
+
+# Refresh Token을 받아서 Access Token을 갱신하는 함수
+def refresh_access_token(refresh_token):
+    try:
+        # grant type을 refresh_token으로 설정
+        token_request= requests.post(f"https://oauth2.googleapis.com/token?client_id={GOOGLE_CLIENT_ID}&client_secret={GOOGLE_CLIENT_SECRET}&grant_type=refresh_token&refresh_token={refresh_token}")
+        token_data = token_request.json()
+        google_access_token = token_data.get('access_token')
+        return google_access_token
+    except Exception as e:
+        print(f"토큰 갱신 오류: {str(e)}")
+        return None
+
+# Access Token 갱신 API
+def refresh_token_view(request):
+    refresh_token = request.COOKIES.get("refresh_token")
+    if not refresh_token:
+        return JsonResponse({"status": 401, "message": "Refresh token not found"}, status=401)
+
+    new_access_token = refresh_access_token(refresh_token)
+    if not new_access_token:
+        return JsonResponse({"status": 401, "message": "Token refresh failed"}, status=401)
+
+    # 새로운 Access Token 설정
+    response = JsonResponse({"status": 200, "message": "Token refreshed"})
+    response.set_cookie(
+        key="access_token",
+        value=new_access_token,
+        httponly=True,
+        secure=False,
+        samesite="Lax"
+    )
     return response
 
 # 쿠키 여부를 확인하고 인증된 사용자만 보여 주는 게시판 화면
