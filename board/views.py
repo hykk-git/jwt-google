@@ -9,22 +9,24 @@ from google.auth.transport.requests import Request
 
 from django.shortcuts import redirect, render
 from django.http import JsonResponse, HttpResponseRedirect
-from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth import authenticate, login
 
-from rest_framework.decorators import api_view, authentication_classes, permission_classes
-from rest_framework.permissions import IsAuthenticated
-from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework.decorators import api_view
 
+# django에서 소셜 계정을 관리하는 모델
 from allauth.socialaccount.models import SocialAccount
 
 from .models import *
 from .forms import SignupForm
+
+# .env 파일을 읽어서 현재 환경 변수로 로드하는 패키지
 from dotenv import load_dotenv
 
+# .env 파일에 있는 값들을 os.environ 딕셔너리에 추가
 load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-# Google OAuth 설정
+# Google OAuth 환경변수 설정(없을 경우 None 반환)
 GOOGLE_USERINFO_SCOPE = os.getenv("GOOGLE_USERINFO_SCOPE")
 GOOGLE_LOGIN_PAGE = os.getenv("GOOGLE_LOGIN_PAGE")
 GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI")
@@ -32,10 +34,11 @@ GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 GOOGLE_REFRESH_TOKEN = os.getenv("GOOGLE_REFRESH_TOKEN")
 
-# 메인 페이지
+# 메인화면
 def main_view(request):
     return render(request, 'main.html')
 
+# 일반 회원가입
 def signup_view(request):
     if request.method == 'POST':
         form = SignupForm(request.POST)
@@ -60,10 +63,28 @@ def login_view(request):
             login(request, user)
             return redirect('/')
         else:
-            return render(request, 'login.html', {'error': 'Invalid credentials'})
+            return render(request, 'login.html', {'error': '형식 오류'})
     return render(request, 'login.html')
 
-# 로그인 페이지 연결
+# httponly, secure = True로 token을 쿠키에 저장하는 함수
+def set_cookies(response, access_token, refresh_token):
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=False,  # 개발시에만 False
+        samesite="None"
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=False,  # 개발 시 False, 배포 시 True
+        samesite="None"
+    )
+    return response
+
+# 구글 로그인 페이지 연결
 def google_login(request):
    # 로그인에 사용할 정보의 범위 설정(로그인에는 email만)
    scope = GOOGLE_USERINFO_SCOPE
@@ -91,7 +112,7 @@ def google_callback(request):
     # output: 디코딩돼서 검증된 id token
     verified_token = id_token.verify_oauth2_token(
         google_id_token,
-        Request(), # ??
+        Request(),
         GOOGLE_CLIENT_ID,
     )
 
@@ -100,37 +121,15 @@ def google_callback(request):
 
     user = User.objects.filter(email=email).first()
 
-    # 기존에 일반 회원가입했던 유저인 경우 → 소셜 계정 추가
+    # 인증된 사용자의 회원가입 여부와 방법 확인
     if user:
-        try:
-            social_user = SocialAccount.objects.get(user=user, provider="google")
-
-            # 이미 Google로 가입한 유저면 바로 로그인 성공 처리 후 main 이동
-            response = HttpResponseRedirect("/")
-            
-            # httponly, secure = True로 access token 쿠키에 저장
-            response.set_cookie(
-                key="access_token",
-                value=google_access_token,
-                httponly=True,
-                secure=True,
-                samesite="Lax"
-            )
-
-            # httponly, secure = True로 refresh token 쿠키에 저장
-            response.set_cookie(
-                key="refresh_token",
-                value=google_refresh_token,
-                httponly=True,
-                secure=True,
-                samesite="Lax"
-            )
-            return response
-        
-        except SocialAccount.DoesNotExist:
-            # 기존에 일반 회원가입 유저인 경우 소셜 계정을 추가함
+        if not SocialAccount.objects.filter(user=user, provider="google").exists():
+            # 기존에 일반 회원가입 유저인 경우 소셜 계정을 추가해야 함
             SocialAccount.objects.create(user=user, provider="google", uid=email)
-            return JsonResponse({"status": 200, "message": "Social account added"}, status=200)
+        # 이미 Google로 가입한 유저를 포함해서 로그인 처리 후 main 이동
+        response = HttpResponseRedirect("/")
+        response = set_cookies(response, google_access_token, google_refresh_token)
+        return response
 
     # 기존에 회원가입하지 않은 유저 → 가입 여부 묻기
     else:
@@ -147,26 +146,30 @@ def google_callback(request):
 
         # 소셜 계정 추가
         SocialAccount.objects.create(user=user, provider="google", uid=email)
-
-        response = JsonResponse({"status": 200, "message": "Signup successful"})
-
-        response.set_cookie(
-            key="access_token",
-            value=google_access_token,
-            httponly=True,
-            secure=True,
-            samesite="Strict"
-        )
-
-        response.set_cookie(
-            key="refresh_token",
-            value=google_refresh_token,
-            httponly=True,
-            secure=True,
-            samesite="Strict"
-        )
+        response = HttpResponseRedirect("/")
+        response = set_cookies(response, google_access_token, google_refresh_token)
         return response
 
+# 쿠키로 현재 로그인 상태를 확인하고 'login'을 Boolean으로 반환하는 함수
+@api_view(['GET'])
+def login_status(request):
+    access_token = request.COOKIES.get('access_token')
+    if access_token:
+        return JsonResponse({"login": True, "message": "로그인 상태"})
+    else:
+        return JsonResponse({"login": False, "message": "로그아웃 상태"})
+    
+# 요청을 받고 브라우저 쿠키를 비활성화시키는 로그아웃 함수
+@api_view(['POST'])
+def logout_view(request):
+    response = JsonResponse({"status": 200, "message": "로그아웃 되었습니다."})
+    
+    # 쿠키 삭제 (쿠키 유효기간 과거로 설정)
+    response.delete_cookie('access_token')
+    response.delete_cookie('refresh_token')
+    return response
+
+# 쿠키 여부를 확인하고 인증된 사용자만 보여 주는 게시판 화면
 @api_view(['GET'])
 def board_view(request):
     # 쿠키에서 access token 받아옴
