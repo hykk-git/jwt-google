@@ -83,7 +83,9 @@ def google_login(request):
    nonce = hashlib.sha256(os.urandom(1024)).hexdigest()
    request.session['state'] = state
    request.session['nonce'] = nonce
-   
+
+   print("처음 state: ", request.session.get('state'))
+   print("처음 nonce: ", request.session.get('nonce'))
    # Google 로그인 페이지를 띄워 주는 역할
    google_auth_request = (
         f"{GOOGLE_LOGIN_PAGE}"
@@ -104,6 +106,8 @@ def google_callback(request):
     code = request.GET.get("code")
     state = request.GET.get("state")
 
+    print("get으로 넘어온 state: ", state)
+    print("state: ", request.session.get('state'))
     # 발급받은 Client ID, SECRET, 받은 인가 코드로 리소스 서버에 token 요청
     token_request= requests.post(f"https://oauth2.googleapis.com/token?client_id={GOOGLE_CLIENT_ID}&client_secret={GOOGLE_CLIENT_SECRET}&code={code}&grant_type=authorization_code&redirect_uri={GOOGLE_REDIRECT_URI}")
 
@@ -115,11 +119,11 @@ def google_callback(request):
     google_id_token = token_data.get('id_token')
 
     # state(위조 방지 토큰) 유효성 검증
-    # if not state or state != request.session.get('state'):
-    #     return JsonResponse({'error': 'Invalid state parameter.'}, status=401)
+    if not state or state != request.session.get('state'):
+        return JsonResponse({'error': 'Invalid state parameter.'}, status=401)
 
     # state는 삭제 권장한다 함
-    # del request.session['state']
+    del request.session['state']
 
     # ID 토큰 유효성 검증
     # input: id token, client_id
@@ -130,6 +134,7 @@ def google_callback(request):
         GOOGLE_CLIENT_ID,
     )
 
+    print("검증된 id 토큰:", verified_token)
     # ID 토큰에서 사용자 정보 가져옴
     email = verified_token.get('email')
     name = verified_token.get('name') # 없을 경우 none
