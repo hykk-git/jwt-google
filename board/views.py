@@ -10,6 +10,7 @@ from google.auth.transport.requests import Request
 
 from django.shortcuts import redirect, render
 from django.http import JsonResponse, HttpResponseRedirect
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from rest_framework.decorators import api_view
 
@@ -101,14 +102,24 @@ def google_login(request):
 def google_callback(request):
     # 프론트에서 인가 코드 받아옴
     code = request.GET.get("code")
+    state = request.GET.get("state")
+
     # 발급받은 Client ID, SECRET, 받은 인가 코드로 리소스 서버에 token 요청
     token_request= requests.post(f"https://oauth2.googleapis.com/token?client_id={GOOGLE_CLIENT_ID}&client_secret={GOOGLE_CLIENT_SECRET}&code={code}&grant_type=authorization_code&redirect_uri={GOOGLE_REDIRECT_URI}")
 
     # 토큰 응답은 JSON으로 옴->json()으로 파싱
     token_data = token_request.json()
+
     google_access_token = token_data.get('access_token')
     google_refresh_token = token_data.get('refresh_token')
     google_id_token = token_data.get('id_token')
+
+    # state(위조 방지 토큰) 유효성 검증
+    # if not state or state != request.session.get('state'):
+    #     return JsonResponse({'error': 'Invalid state parameter.'}, status=401)
+
+    # state는 삭제 권장한다 함
+    # del request.session['state']
 
     # ID 토큰 유효성 검증
     # input: id token, client_id
@@ -119,6 +130,7 @@ def google_callback(request):
         GOOGLE_CLIENT_ID,
     )
 
+    # ID 토큰에서 사용자 정보 가져옴
     email = verified_token.get('email')
     name = verified_token.get('name') # 없을 경우 none
 
@@ -129,29 +141,20 @@ def google_callback(request):
         if not SocialAccount.objects.filter(user=user, provider="google").exists():
             # 기존에 일반 회원가입 유저인 경우 소셜 계정을 추가해야 함
             SocialAccount.objects.create(user=user, provider="google", uid=email)
-        # 이미 Google로 가입한 유저를 포함해서 로그인 처리 후 main 이동
-        response = HttpResponseRedirect("/")
-        response = set_cookies(response, google_access_token, google_refresh_token)
-        return response
 
     # 기존에 회원가입하지 않은 유저 → 가입 여부 묻기
     else:
-        if not name:
-            # 이름 정보가 없는 경우 프로필 범위를 추가하여 google에 토큰 다시 요청
-            return redirect(
-                f"{GOOGLE_LOGIN_PAGE}?client_id={GOOGLE_CLIENT_ID}&response_type=code&redirect_uri={GOOGLE_REDIRECT_URI}&scope=openid%20email%20profile&access_type=offline&prompt=consent"
-            )
-
-        # 이름 정보가 있으면 profile 받아온 것-> 회원가입 진행
-        user = User.objects.create(email=email, username=name)
-        user.set_unusable_password()
-        user.save()
-
-        # 소셜 계정 추가
+        # 회원가입 진행(소셜 계정 추가)
+        user = User.objects.create_user(email=email, name=name)
         SocialAccount.objects.create(user=user, provider="google", uid=email)
-        response = HttpResponseRedirect("/")
-        response = set_cookies(response, google_access_token, google_refresh_token)
-        return response
+
+    # 로그인 처리(토큰 발급 후 main 이동)
+    app_refresh_token = RefreshToken.for_user(user)
+    app_access_token = app_refresh_token.access_token
+
+    response = HttpResponseRedirect("/")
+    response = set_cookies(response, app_access_token, app_refresh_token)
+    return response
 
 # 쿠키로 현재 로그인 상태를 확인하고 'login'을 Boolean으로 반환하는 함수
 @api_view(['GET'])
@@ -172,21 +175,21 @@ def logout_view(request):
     response.delete_cookie('refresh_token')
     return response
 
-# Refresh Token을 받아서 Access Token을 갱신하는 함수
+# Googe Refresh Token을 받아서 Access Token을 갱신하는 함수
 def refresh_access_token(refresh_token):
     try:
         # grant type을 refresh_token으로 설정
         token_request= requests.post(f"https://oauth2.googleapis.com/token?client_id={GOOGLE_CLIENT_ID}&client_secret={GOOGLE_CLIENT_SECRET}&grant_type=refresh_token&refresh_token={refresh_token}")
         token_data = token_request.json()
-        google_access_token = token_data.get('access_token')
+        google_access_token = token_data.get('google_access_token')
         return google_access_token
     except Exception as e:
         print(f"토큰 갱신 오류: {str(e)}")
         return None
 
-# Access Token 갱신 API
+# Google Access Token 갱신 API
 def refresh_token_view(request):
-    refresh_token = request.COOKIES.get("refresh_token")
+    refresh_token = request.COOKIES.get("google_refresh_token")
     if not refresh_token:
         return JsonResponse({"status": 401, "message": "Refresh token not found"}, status=401)
 
@@ -197,7 +200,7 @@ def refresh_token_view(request):
     # 새로운 Access Token 설정
     response = JsonResponse({"status": 200, "message": "Token refreshed"})
     response.set_cookie(
-        key="access_token",
+        key="google_access_token",
         value=new_access_token,
         httponly=True,
         secure=False,
