@@ -21,19 +21,7 @@
         <a href="/board"><button id="board-btn">게시판</button></a>
     </div>
 
-    <script>
-        // URL에서 인가 코드 추출
-        const params = new URLSearchParams(window.location.search);
-        const code = params.get("code");
-        const state = params.get("state");
-        // 미리 설정한 /login/oauth2/google URI로 쿼리 붙여서 fetch
-        if (code) {
-                fetch(`/login/oauth2/google/?code=${code}`)
-                    .catch(error => {
-                        console.error("Login Error:", error);
-                    });
-            }
-        
+    <script>        
         // 서버에 로그인 상태 확인 요청
         function checkLoginStatus() {
             fetch("/login/status/", {
