@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import os
+import hashlib
 import requests
 
 # id 검증에 필요한 google 패키지
@@ -65,7 +66,7 @@ def set_cookies(response, access_token, refresh_token):
         key="refresh_token",
         value=refresh_token,
         httponly=True,
-        secure=False,  # 개발 시 False, 배포 시 True
+        secure=False, 
         samesite="None"
     )
     return response
@@ -76,11 +77,25 @@ def login_view(request):
 
 # 구글 로그인 페이지 연결
 def google_login(request):
-   # 로그인에 사용할 정보의 범위 설정(로그인에는 email만)
-   scope = GOOGLE_USERINFO_SCOPE
-
+   # 위조 방지 토큰, nonce 생성
+   state = hashlib.sha256(os.urandom(1024)).hexdigest()
+   nonce = hashlib.sha256(os.urandom(1024)).hexdigest()
+   request.session['state'] = state
+   request.session['nonce'] = nonce
+   
    # Google 로그인 페이지를 띄워 주는 역할
-   return redirect(f"{GOOGLE_LOGIN_PAGE}?client_id={GOOGLE_CLIENT_ID}&response_type=code&redirect_uri={GOOGLE_REDIRECT_URI}&scope={scope}&access_type=offline&prompt=consent")
+   google_auth_request = (
+        f"{GOOGLE_LOGIN_PAGE}"
+        f"?client_id={GOOGLE_CLIENT_ID}"
+        f"&response_type=code"
+        f"&redirect_uri={GOOGLE_REDIRECT_URI}"
+        f"&scope=openid%20email%20profile"
+        f"&access_type=offline"
+        f"&prompt=consent"
+        f"&state={state}"
+        f"&nonce={nonce}"
+    )
+   return redirect(google_auth_request)
 
 # 인가 코드를 받아 로그인 처리
 def google_callback(request):
@@ -190,7 +205,7 @@ def refresh_token_view(request):
     )
     return response
 
-# 쿠키 여부를 확인하고 인증된 사용자만 보여 주는 게시판 화면
+# 쿠키 여부를 확인하고 인가된 사용자만 보여 주는 게시판 화면
 @api_view(['GET'])
 def board_view(request):
     # 쿠키에서 access token 받아옴
