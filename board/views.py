@@ -142,7 +142,7 @@ def google_callback(request):
     response = set_cookies(response, app_access_token, app_refresh_token)
     return response
 
-# 쿠키로 현재 로그인 상태를 확인하고 'login'을 Boolean으로 반환하는 함수
+# 쿠키를 확인해서 로그인 여부를 Boolean 타입으로 'login'으로 반환하는 함수
 @api_view(['GET'])
 def login_status(request):
     access_token = request.COOKIES.get('access_token')

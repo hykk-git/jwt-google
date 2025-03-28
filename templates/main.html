@@ -30,13 +30,9 @@
             .then(data => {
                 // login
                 if (data.login) {
-                    document.getElementById("signup-btn").style.display = "none";
-                    document.getElementById("login-btn").style.display = "none";
                     document.getElementById("google-login-btn").style.display = "none";
                     document.getElementById("logout-btn").style.display = "inline-block";
                 } else {
-                    document.getElementById("signup-btn").style.display = "inline-block";
-                    document.getElementById("login-btn").style.display = "inline-block";
                     document.getElementById("google-login-btn").style.display = "inline-block";
                     document.getElementById("logout-btn").style.display = "none";
                 }
