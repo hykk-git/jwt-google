@@ -39,21 +39,6 @@ GOOGLE_REFRESH_TOKEN = os.getenv("GOOGLE_REFRESH_TOKEN")
 def main_view(request):
     return render(request, 'main.html')
 
-# 일반 회원가입
-def signup_view(request):
-    if request.method == 'POST':
-        form = SignupForm(request.POST)
-        if form.is_valid():
-            user = form.save(commit=False)
-
-            # 비밀번호 해시해서 저장
-            user.set_password(form.cleaned_data['password'])
-            user.save()
-            return redirect('/')
-    else:
-        form = SignupForm()
-    return render(request, 'signup.html', {'form': form})
-
 # httponly, secure = True로 token을 쿠키에 저장하는 함수
 def set_cookies(response, access_token, refresh_token):
     response.set_cookie(
@@ -71,10 +56,6 @@ def set_cookies(response, access_token, refresh_token):
         samesite="None"
     )
     return response
-
-# 일반 회원가입 사용자 로그인
-def login_view(request):
-    return render(request, 'login.html')
 
 # 구글 로그인 페이지 연결
 def google_login(request):
@@ -102,16 +83,18 @@ def google_login(request):
 
 # 인가 코드를 받아 로그인 처리
 def google_callback(request):
-    # 프론트에서 인가 코드, 받아옴
+    # 프론트에서 인가 코드, 위조 방지 토큰 받아옴
     code = request.GET.get("code")
     state = request.GET.get("state")
 
     # 발급받은 Client ID, SECRET, 받은 인가 코드로 리소스 서버에 token 요청
     token_request= requests.post(f"https://oauth2.googleapis.com/token?client_id={GOOGLE_CLIENT_ID}&client_secret={GOOGLE_CLIENT_SECRET}&code={code}&grant_type=authorization_code&redirect_uri={GOOGLE_REDIRECT_URI}")
 
-    # 토큰 응답은 JSON으로 옴->json()으로 파싱
+    # 토큰 응답은 JSON->json()으로 파싱
     token_data = token_request.json()
-
+    
+    # 사용자 추가 정보를 얻을 google access token, refresh token
+    # 사용자 로그인 정보를 얻을 id token
     google_access_token = token_data.get('access_token')
     google_refresh_token = token_data.get('refresh_token')
     google_id_token = token_data.get('id_token')
@@ -120,7 +103,7 @@ def google_callback(request):
     if not state or state != request.session.get('state'):
         return JsonResponse({'error': 'Invalid state parameter.'}, status=401)
 
-    # state는 삭제 권장한다 함
+    # 보안을 위해 세션 쿠키 삭제
     del request.session['state']
     del request.session['nonce']
 
@@ -133,9 +116,9 @@ def google_callback(request):
         GOOGLE_CLIENT_ID,
     )
 
-    # ID 토큰에서 사용자 정보 가져옴
+    # ID 토큰에서 사용자 로그인 정보(email, name) 가져옴
     email = verified_token.get('email')
-    name = verified_token.get('name') # 없을 경우 none
+    name = verified_token.get('name')
 
     user = User.objects.filter(email=email).first()
 
