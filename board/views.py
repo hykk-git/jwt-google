@@ -59,14 +59,6 @@ def set_cookies(response, access_token, refresh_token):
 
 # 구글 로그인 페이지 연결
 def google_login(request):
-   # 위조 방지 토큰, nonce 생성
-   state = hashlib.sha256(os.urandom(1024)).hexdigest()
-   nonce = hashlib.sha256(os.urandom(1024)).hexdigest()
-
-   # 이후 검증을 위해 세션에 저장
-   request.session['state'] = state
-   request.session['nonce'] = nonce
-
    # Google 로그인 페이지를 띄워 주는 역할
    google_auth_request = (
         f"{GOOGLE_LOGIN_PAGE}"
@@ -83,9 +75,8 @@ def google_login(request):
 
 # 인가 코드를 받아 로그인 처리
 def google_callback(request):
-    # 프론트에서 인가 코드, 위조 방지 토큰 받아옴
+    # 프론트에서 인가 코드 받아옴
     code = request.GET.get("code")
-    state = request.GET.get("state")
 
     # 발급받은 Client ID, SECRET, 받은 인가 코드로 리소스 서버에 token 요청
     token_request= requests.post(f"https://oauth2.googleapis.com/token?client_id={GOOGLE_CLIENT_ID}&client_secret={GOOGLE_CLIENT_SECRET}&code={code}&grant_type=authorization_code&redirect_uri={GOOGLE_REDIRECT_URI}")
@@ -98,14 +89,6 @@ def google_callback(request):
     google_access_token = token_data.get('access_token')
     google_refresh_token = token_data.get('refresh_token')
     google_id_token = token_data.get('id_token')
-
-    # state(위조 방지 토큰) 유효성 검증
-    if not state or state != request.session.get('state'):
-        return JsonResponse({'error': 'Invalid state parameter.'}, status=401)
-
-    # 보안을 위해 세션 쿠키 삭제
-    del request.session['state']
-    del request.session['nonce']
 
     # ID 토큰 유효성 검증
     # input: id token, client_id
