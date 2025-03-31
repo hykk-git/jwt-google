@@ -68,8 +68,6 @@ def google_login(request):
         f"&scope=openid%20email%20profile"
         f"&access_type=offline"
         f"&prompt=consent"
-        f"&state={state}"
-        f"&nonce={nonce}"
     )
    return redirect(google_auth_request)
 
