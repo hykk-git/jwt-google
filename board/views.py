@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import os
-import hashlib
 import requests
 
 # id 검증에 필요한 google 패키지
@@ -18,7 +17,6 @@ from rest_framework.decorators import api_view
 from allauth.socialaccount.models import SocialAccount
 
 from .models import *
-from .forms import SignupForm
 
 # .env 파일을 읽어서 현재 환경 변수로 로드하는 패키지
 from dotenv import load_dotenv
